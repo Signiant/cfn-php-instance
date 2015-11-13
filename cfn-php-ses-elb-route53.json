@@ -1,0 +1,385 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "EC2 instance and ELB for support to use for desk.com helper app.",
+  
+  "Parameters" : {
+          
+    "InstanceType" : {
+      "Description" : "WebServer EC2 instance type",
+      "Type" : "String",
+      "Default" : "t2.micro",
+      "AllowedValues" : [ "t1.micro", "t2.micro", "t2.small", "t2.medium", "m1.small", "m1.medium", "m1.large", "m1.xlarge", "m2.xlarge",
+"m2.2xlarge", "m2.4xlarge", "m3.medium", "m3.large", "m3.xlarge", "m3.2xlarge", "c1.medium", "c1.xlarge", "c3.large", "c3.xlarge", "c3.2xlarge",
+"c3.4xlarge", "c3.8xlarge", "r3.large", "r3.xlarge", "r3.2xlarge", "r3.4xlarge", "r3.8xlarge", "i2.xlarge", "i2.2xlarge", "i2.4xlarge",
+"i2.8xlarge", "hi1.4xlarge", "hs1.8xlarge", "cr1.8xlarge", "cc2.8xlarge", "cg1.4xlarge"],
+      "ConstraintDescription" : "must be a valid EC2 instance type."
+    },
+	"KeyName": {
+      "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instance",
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "ConstraintDescription": "must be the name of an existing EC2 KeyPair."
+    },
+	"LoadBalancerSSLCertId" : {
+	  "Description" : "[Load Balancer] The ID of an SSL certificate",
+	  "Type" : "String"
+	},
+	  "VPCSubnet" : {
+      "Description" : "VPC subnet ID to deploy the instance in.",
+      "Type" : "AWS::EC2::Subnet::Id"
+    },
+    "VpcId" : {
+      "Description" : "VpcId of your existing Virtual Private Cloud (VPC)",
+      "Type" : "AWS::EC2::VPC::Id",
+      "ConstraintDescription": "must be a pre-existing VPC"
+    },
+    "InstanceProfile" : {
+      "Description" : "Name of an IAM Instance Profile to use for the cluster nodes",
+      "Type" : "String"
+    },
+	"DNSPrefix" : {
+	"Description" : "[DNS Record] Prefix for the ELB DNS Record",
+	"Type" : "String",
+	"Default" : ""
+	},
+	"DNSZone" : {
+		"Description" : "[DNS Record] Route53-hosted zone to use for the ELB's DNS record (<prefix>.<zone>)",
+		"Type" : "String",
+		"Default" : ""
+	},
+	"SMTPHost" : {
+	"Description" : "SES SMTP host",
+	"Type" : "String",
+	"Default" : ""
+	},
+	"SMTPVerifiedSender" : {
+	"Description" : "A valid and verified SES sender address to use",
+	"Type" : "String",
+	"Default" : ""
+	},
+	"SMTPUser" : {
+	"Description" : "SMTP username for SES",
+	"Type" : "String",
+	"Default" : ""
+	},
+	"SMTPPassword" : {
+	"Description" : "SMTP password for SES",
+	"Type" : "String",
+	"Default" : ""
+	}
+  },
+  
+  "Mappings" : {
+    "AWSInstanceType2Arch" : {
+      "t1.micro"    : { "Arch" : "PV64"   },
+      "t2.micro"    : { "Arch" : "HVM64"  },
+      "t2.small"    : { "Arch" : "HVM64"  },
+      "t2.medium"   : { "Arch" : "HVM64"  },
+      "m1.small"    : { "Arch" : "PV64"   },
+      "m1.medium"   : { "Arch" : "PV64"   },
+      "m1.large"    : { "Arch" : "PV64"   },
+      "m1.xlarge"   : { "Arch" : "PV64"   },
+      "m2.xlarge"   : { "Arch" : "PV64"   },
+      "m2.2xlarge"  : { "Arch" : "PV64"   },
+      "m2.4xlarge"  : { "Arch" : "PV64"   },
+      "m3.medium"   : { "Arch" : "HVM64"  },
+      "m3.large"    : { "Arch" : "HVM64"  },
+      "m3.xlarge"   : { "Arch" : "HVM64"  },
+      "m3.2xlarge"  : { "Arch" : "HVM64"  },
+      "c1.medium"   : { "Arch" : "PV64"   },
+      "c1.xlarge"   : { "Arch" : "PV64"   },
+      "c3.large"    : { "Arch" : "HVM64"  },
+      "c3.xlarge"   : { "Arch" : "HVM64"  },
+      "c3.2xlarge"  : { "Arch" : "HVM64"  },
+      "c3.4xlarge"  : { "Arch" : "HVM64"  },
+      "c3.8xlarge"  : { "Arch" : "HVM64"  },
+      "r3.large"    : { "Arch" : "HVM64"  },
+      "r3.xlarge"   : { "Arch" : "HVM64"  },
+      "r3.2xlarge"  : { "Arch" : "HVM64"  },
+      "r3.4xlarge"  : { "Arch" : "HVM64"  },
+      "r3.8xlarge"  : { "Arch" : "HVM64"  },
+      "i2.xlarge"   : { "Arch" : "HVM64"  },
+      "i2.2xlarge"  : { "Arch" : "HVM64"  },
+      "i2.4xlarge"  : { "Arch" : "HVM64"  },
+      "i2.8xlarge"  : { "Arch" : "HVM64"  },
+      "hi1.4xlarge" : { "Arch" : "HVM64"  },
+      "hs1.8xlarge" : { "Arch" : "HVM64"  },
+      "cr1.8xlarge" : { "Arch" : "HVM64"  },
+      "cc2.8xlarge" : { "Arch" : "HVM64"  }
+    },
+
+    "AWSRegionArch2AMI" : {
+      "us-east-1"      : { "PV64" : "ami-5fb8c835", "HVM64" : "ami-60b6c60a" },
+      "us-west-2"      : { "PV64" : "ami-d93622b8", "HVM64" : "ami-f0091d91" },
+      "us-west-1"      : { "PV64" : "ami-56ea8636", "HVM64" : "ami-d5ea86b5" },
+      "eu-west-1"      : { "PV64" : "ami-95e33ce6", "HVM64" : "ami-bff32ccc" },
+      "eu-central-1"   : { "PV64" : "ami-794a5915", "HVM64" : "ami-bc5b48d0" }
+    }
+  },
+    
+  "Resources" : { 
+
+	"S3Bucket" : {
+		"Type" : "AWS::S3::Bucket",
+		"Properties": {
+			"AccessControl" : "Private",
+			"BucketName" : "signiant-support-files",
+			"VersioningConfiguration" : { "Status" : "Enabled" },
+			"Tags" : [
+				  {"Key" : "Name", "Value" : { "Ref": "AWS::StackName" } }
+			]
+		}			
+	},
+
+    "WebServerInstance": {  
+      "Type" : "AWS::EC2::Instance",
+      "Metadata" : {
+        "Comment" : "Install a simple PHP application",
+        "AWS::CloudFormation::Init" : {
+          "config" : {
+            "packages" : {
+              "yum" : {
+                "httpd"             : [],
+                "php"               : [],
+				"fuse"				: [],
+				"fuse-libs"			: [],
+				"m4"				: [],
+				"sendmail-cf"		: [],
+				"cyrus-sasl-plain"	: []
+              },
+			  "python" : {
+				"yas3fs"			: []
+			  }
+            },
+
+            "files" : {
+
+			  "/etc/mail/authinfo" : {
+			    "content" : { "Fn::Join" : ["", [
+                  "AuthInfo:", { "Ref" : "SMTPHost" }, " \"U:root\" \"I:", { "Ref" : "SMTPUser" }, "\" \"P:", { "Ref" : "SMTPPassword" }, "\" \"M:PLAIN\"\n"
+                ]]},
+                "mode"    : "000644",
+                "owner"   : "root",
+                "group"   : "root"
+			  },
+			  
+			  "/etc/mail/access" : {
+			    "content" : { "Fn::Join" : ["", [
+				  "Connect:localhost.localdomain           RELAY\n",
+				  "Connect:localhost                       RELAY\n",
+				  "Connect:127.0.0.1                       RELAY\n",
+				  "Connect:",{ "Ref" : "SMTPHost" }, "     RELAY\n"
+                ]]},
+                "mode"    : "000644",
+                "owner"   : "root",
+                "group"   : "root"
+			  },
+			  
+			  "/configure-sendmail" : {
+			    "content" : { "Fn::Join" : ["", [
+				  "#!/bin/bash\n",
+				  "if [ -e \"/.sendmaildone\" ]; then\n",
+				  "logger -t configure-sendmail script has already completed - exiting\n",
+				  "exit\n",
+				  "fi\n",
+				  "touch /.sendmaildone\n",
+				  "logger -t configure-sendmail Configuring sendmail for SES SMTP\n",
+				  "makemap hash /etc/mail/authinfo.db < /etc/mail/authinfo\n",
+				  "makemap hash /etc/mail/access.db < /etc/mail/access\n",
+				  "MAILERFOUND=0\n",
+				  "SENDER=",{ "Ref" : "SMTPVerifiedSender" }, "\n",
+				  "DOMAIN=${SENDER#*@}\n",
+				  "while read line\n",
+				  "do\n",
+				  "echo $line | grep -q \"^MAILER\"\n",
+				  "if [ $? -eq 0 ] && [ $MAILERFOUND -ne 1 ]; then\n",
+				  "MAILERFOUND=1\n",
+				  "echo \"define(\\`SMART_HOST', \\`", { "Ref" : "SMTPHost" }, "')dnl\"\n",
+				  "echo \"define(\\`RELAY_MAILER_ARGS', \\`TCP \\$h 25')dnl\"\n",
+				  "echo \"define(\\`confAUTH_MECHANISMS', \\`LOGIN PLAIN')dnl\"\n",
+				  "echo \"FEATURE(\\`authinfo', \\`hash -o /etc/mail/authinfo.db')dnl\"\n",
+				  "echo \"MASQUERADE_AS(\\`${DOMAIN}')dnl\"\n",
+				  "echo \"FEATURE(masquerade_envelope)dnl\"\n",
+				  "echo \"FEATURE(masquerade_entire_domain)dnl\"\n",
+				  "fi\n",
+				  "echo $line\n",
+				  "done < /etc/mail/sendmail.mc > /tmp/sendmail.mc\n",
+				  "mv /tmp/sendmail.mc /etc/mail/sendmail.mc\n",
+				  "chmod 666 /etc/mail/sendmail.cf\n",
+				  "m4 /etc/mail/sendmail.mc > /etc/mail/sendmail.cf\n",
+				  "chmod 644 /etc/mail/sendmail.cf\n",
+				  "/etc/init.d/sendmail restart\n"
+                ]]},
+                "mode"    : "000744",
+                "owner"   : "root",
+                "group"   : "root"
+			  },
+			  
+              "/var/www/html/index.php" : {
+                "content" : { "Fn::Join" : ["", [
+                  "<?php\n",
+                  "echo '<h1>AWS CloudFormation</h1>';\n",
+                  "?>\n"
+                ]]},
+                "mode"    : "000644",
+                "owner"   : "apache",
+                "group"   : "apache"
+              },
+			  
+              "/etc/cfn/cfn-hup.conf" : {
+                "content" : { "Fn::Join" : ["", [
+                  "[main]\n",
+                  "stack=", { "Ref" : "AWS::StackId" }, "\n",
+                  "region=", { "Ref" : "AWS::Region" }, "\n"
+                ]]},
+                "mode"    : "000400",
+                "owner"   : "root",
+                "group"   : "root"
+              },
+
+              "/etc/cfn/hooks.d/cfn-auto-reloader.conf" : {
+                "content": { "Fn::Join" : ["", [
+                  "[cfn-auto-reloader-hook]\n",
+                  "triggers=post.update\n",
+                  "path=Resources.WebServerInstance.Metadata.AWS::CloudFormation::Init\n",
+                  "action=/opt/aws/bin/cfn-init -s ", { "Ref" : "AWS::StackId" }, " -r WebServerInstance ",
+                                                   " --region     ", { "Ref" : "AWS::Region" }, "\n",
+                  "runas=root\n"
+                ]]}
+              }
+            },
+
+            "services" : {
+              "sysvinit" : {
+                "httpd"    : { "enabled" : "true", "ensureRunning" : "true" },
+                "cfn-hup" : { "enabled" : "true", "ensureRunning" : "true",
+                    "files" : ["/etc/cfn/cfn-hup.conf", "/etc/cfn/hooks.d/cfn-auto-reloader.conf"]}
+              }
+            }
+          }
+        }
+      },
+
+      "Properties": {
+        "ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" },
+                          { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "InstanceType" }, "Arch" ] } ] },
+        "InstanceType"   : { "Ref" : "InstanceType" },
+		"SubnetId" : {"Ref" : "VPCSubnet"},
+        "SecurityGroupIds" : [ {"Ref" : "WebServerSecurityGroup"} ],
+		"IamInstanceProfile" : { "Ref" : "InstanceProfile" },
+		"KeyName" : { "Ref" : "KeyName" },
+		"Tags" : [
+		      {"Key" : "Name", "Value" : { "Ref": "AWS::StackName" } }
+		],
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+             "#!/bin/bash -xe\n",
+             "yum update -y aws-cfn-bootstrap\n",
+
+             "# Install the files and packages from the metadata\n",
+             "/opt/aws/bin/cfn-init -v ",
+             "         --stack ", { "Ref" : "AWS::StackName" },
+             "         --resource WebServerInstance ",
+             "         --region ", { "Ref" : "AWS::Region" }, "\n",
+
+             "# Start up the cfn-hup daemon to listen for changes to the Web Server metadata\n",
+             "/opt/aws/bin/cfn-hup || error_exit 'Failed to start cfn-hup'\n",
+
+			 "# Install yas3fs\n",
+			 "sed -i'' 's/^# *user_allow_other/user_allow_other/' /etc/fuse.conf\n",
+			 "mkdir /s3\n",
+			 "chmod 777 /s3\n",
+			 "echo /usr/local/bin/yas3fs -l /var/log/yas3fs.log s3://", { "Ref" : "S3Bucket" }, " /s3 >> /etc/rc.local\n",
+			 "echo /configure-sendmail >> /etc/rc.local\n",
+			 			 
+             "# Signal the status from cfn-init\n",
+             "/opt/aws/bin/cfn-signal -e $? ",
+             "         --stack ", { "Ref" : "AWS::StackName" },
+             "         --resource WebServerInstance ",
+             "         --region ", { "Ref" : "AWS::Region" }, "\n"
+        ]]}}        
+      },
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT10M"
+        }
+      }
+    },
+
+    "WebServerSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable HTTP access via port 80 from the ELB.  Allow SSH",
+		"VpcId" : { "Ref" : "VpcId" },
+        "SecurityGroupIngress" : [
+		{ "IpProtocol" : "tcp", "FromPort" : "80", "ToPort" : "80", "SourceSecurityGroupId" : { "Ref" : "LoadBalancerSecurityGroup" }},
+		  {"IpProtocol" : "tcp", "FromPort" : "22", "ToPort" : "22", "CidrIp" : "0.0.0.0/0"}
+        ]
+      }      
+    },
+	
+	 "LoadBalancerSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable HTTPS access via port 443",
+		"VpcId" : { "Ref" : "VpcId" },
+        "SecurityGroupIngress" : [
+          {"IpProtocol" : "tcp", "FromPort" : "443", "ToPort" : "443", "CidrIp" : "0.0.0.0/0"}
+        ]
+      }      
+    },
+
+"MyLoadBalancer" : {
+    "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
+    "Properties" : {
+        "Subnets" : [{ "Ref" : "VPCSubnet" }],
+        "Instances" : [
+            { "Ref" : "WebServerInstance" }
+        ],
+		"SecurityGroups" : [ { "Ref" : "LoadBalancerSecurityGroup" } ],
+        "Listeners" : [
+		{
+			"InstancePort" : "80",
+			"LoadBalancerPort" : "443",
+			"Protocol" : "HTTPS",
+			"SSLCertificateId" : { "Ref" : "LoadBalancerSSLCertId" }
+		}, 
+		{
+            "LoadBalancerPort" : "80",
+            "InstancePort" : "80",
+            "Protocol" : "HTTP"
+        } ],
+
+        "HealthCheck" : {
+            "Target" : "HTTP:80/",
+            "HealthyThreshold" : "3",
+            "UnhealthyThreshold" : "5",
+            "Interval" : "30",
+            "Timeout" : "5"
+        }
+    }
+  },
+		"DNSRecord" : {
+			"Type" : "AWS::Route53::RecordSet",
+			"Properties" : {
+				"AliasTarget" : {
+					"HostedZoneId" : { "Fn::GetAtt" : [ "MyLoadBalancer", "CanonicalHostedZoneNameID" ] },
+					"DNSName" : { "Fn::GetAtt" : [ "MyLoadBalancer", "CanonicalHostedZoneName" ] }
+				},
+				"HostedZoneName" : { "Fn::Join" : [ "", [ { "Ref" : "DNSZone" }, "."]] },
+				"Name" : { "Fn::Join" : [ "", [ {"Ref" : "DNSPrefix" }, ".", { "Ref" : "DNSZone" }, "." ]]},
+				"Type" : "A"
+			}
+		}  
+  },
+  
+  "Outputs" : {
+    "WebsiteURL" : {
+      "Description" : "Application URL",
+      "Value" : { "Fn::Join" : ["", ["http://", { "Ref" : "DNSRecord"}]] }
+    },
+	"S3BucketName" : {
+	  "Description" : "Name of the S3 bucket generated",
+	  "Value" : { "Ref" : "S3Bucket" }
+	}
+  }
+}
