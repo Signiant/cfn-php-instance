@@ -141,15 +141,16 @@
               "yum" : {
                 "httpd"             : [],
                 "php"               : [],
-				"fuse"				: [],
-				"fuse-libs"			: [],
-				"m4"				: [],
-				"sendmail-cf"		: [],
-				"cyrus-sasl-plain"	: []
+                "php-gd"            : [],
+		"fuse"	            : [],
+		"fuse-libs"         : [],
+		"m4"                : [],
+		"sendmail-cf"       : [],
+		"cyrus-sasl-plain"  : []
               },
-			  "python" : {
-				"yas3fs"			: []
-			  }
+              "python" : {
+		"yas3fs"            : []
+              }
             },
 
             "files" : {
